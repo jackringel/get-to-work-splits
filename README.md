@@ -4,7 +4,7 @@ Better split comparisons for the in-game speedrun timer in
 [Get To Work](https://store.steampowered.com/app/2706170/).
 
 The game's timer only keeps **one** saved set of splits; pressing "save splits" overwrites whatever
-was there. You can hold a PB, but you can't also compare against best segments/SoB or best exits
+was there. You can hold a PB, but you can't also compare against best segments/SoB or best exits.
 
 This tool turns "save splits" into a save-everything button. It watches the game's splits file and
 folds every saved run into three comparisons; before a run, you pick which one to load back into the
