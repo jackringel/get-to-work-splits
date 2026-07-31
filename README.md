@@ -30,6 +30,22 @@ Or, with [pipx](https://pipx.pypa.io/) so it lands in its own environment:
 pipx install git+https://github.com/jackringel/get-to-work-splits
 ```
 
+If `gtw-splits` comes back as "not recognized", pip installed it into a `Scripts` folder that isn't
+on your PATH; pip says so in a yellow warning during install. Either use the module form, which
+always works and takes the same arguments:
+
+```
+python -m gtw_splits
+```
+
+or add that folder to your PATH once and open a new terminal:
+
+```powershell
+$s = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+$u = [Environment]::GetEnvironmentVariable('PATH','User')
+if ($u -notlike "*$s*") { [Environment]::SetEnvironmentVariable('PATH', ($u.TrimEnd(';') + ';' + $s), 'User') }
+```
+
 ## Use
 
 ```
