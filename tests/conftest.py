@@ -37,6 +37,13 @@ REAL_TIMES = [
 ]
 
 
+#: A real save made partway through a run. The game's log had recorded four
+#: completed sections (Applying For Jobs / Your First Interview / Warehouse
+#: Trainee / Warehouse Worker) and the file holds exactly those four times --
+#: the section in progress at save time is absent from it entirely.
+REAL_UNFINISHED_TIMES = [84.16977, 69.97287, 22.8181782, 274.35376] + [0.0] * 7
+
+
 @pytest.fixture
 def real_game_file(tmp_path):
     path = tmp_path / "best_split_times.txt"

@@ -120,9 +120,9 @@ Set `GTW_SPLITS_HOME` to relocate the tool's own data.
 ## Notes
 
 - Times are per-segment durations. `0.0` means "no time recorded".
-- The game writes the split you're *currently* on when you save, so that partial time is discarded
-  along with everything after it; an abandoned run still contributes its completed splits to best
-  segments and best exits without polluting them.
+- The game writes a split only once you *finish* it, so saving partway through a run records every
+  section you completed and nothing for the one you're on. An abandoned run still contributes all of
+  its completed splits to best segments and best exits.
 - Loading a comparison overwrites the game's splits file. That's the intended workflow (your data
   lives in `splits.json`), and a backup is taken first either way.
 

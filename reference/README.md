@@ -37,6 +37,7 @@ Copying is safe — the tool never writes back here.
 | File | Why it's interesting |
 | --- | --- |
 | `best_split_times.txt` | The only file this tool reads or writes. .NET `XmlSerializer` output: one `<float>` per split, per-segment durations, `0.0` for no time. Note there is no trailing newline — `gamefile.render_times` reproduces that exactly. |
+| `gold_split_times.txt` | Same format, written by the game at the same moment. The game's own best-segments tracking, kept separately from the PB file. This tool ignores it — it derives best segments from the runs it sees — but it's a useful cross-check when working out what a save meant. |
 | `SaveSlot*/gamestate_data.xml` | Overall progress for a save slot. Small; a good starting point for anything needing run context. |
 | `SaveSlot*/level_data.xml` | Per-level state. The largest of the save files. |
 | `SaveSlot*/player_data.xml` | Player position, inventory, and similar. |
@@ -60,5 +61,11 @@ hardcodes that count:
 </SpeedrunTimerData>
 ```
 
-The game writes the split you are *currently* on when you save, so the last recorded segment of an
-unfinished run is a partial time. See `Run.from_game_times` in `src/gtw_splits/model.py`.
+The game writes a split only once you *finish* it — the section you are currently on is not in the
+file at all, so every recorded time is complete. `Player.log` is the proof: it emits one
+
+```
+Speedrun Mode- Completed:Warehouse Trainee, Split: 00:00:22.8180000
+```
+
+line per `<float>` written, in order. See `Run.from_game_times` in `src/gtw_splits/model.py`.

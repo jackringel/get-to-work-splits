@@ -4,7 +4,7 @@ import pytest
 
 from gtw_splits.model import Comparison, Run, SplitsDatabase, format_time
 
-from .conftest import REAL_TIMES
+from .conftest import REAL_TIMES, REAL_UNFINISHED_TIMES
 
 
 def db(split_count=3):
@@ -15,15 +15,34 @@ def ingest(database, times):
     return database.ingest(Run.from_game_times(list(times)))
 
 
-# -- partial-run handling -------------------------------------------------
+# -- unfinished-run handling ----------------------------------------------
 
 
-def test_in_progress_segment_is_discarded():
-    """The game saves the split you are on; that partial time must not count."""
+def test_every_written_segment_is_kept():
+    """Regression: the last written segment used to be discarded as partial.
+
+    The game writes a segment only once you finish it, so an unfinished run
+    contributes all of its written times -- dropping the last one silently
+    lost a completed split from every save made mid-run.
+    """
     run = Run.from_game_times([10.0, 10.0, 3.0, 0.0, 0.0])
-    assert run.segments == (10.0, 10.0, 0.0, 0.0, 0.0)
-    assert run.recorded_prefix == 2
+    assert run.segments == (10.0, 10.0, 3.0, 0.0, 0.0)
+    assert run.recorded_prefix == 3
     assert not run.is_complete
+
+
+def test_times_after_a_gap_are_discarded():
+    run = Run.from_game_times([10.0, 0.0, 5.0])
+    assert run.segments == (10.0, 0.0, 0.0)
+    assert run.recorded_prefix == 1
+
+
+def test_real_unfinished_save_keeps_every_completed_section():
+    """Pinned to a real capture: four completed sections, four times kept."""
+    database = SplitsDatabase(split_count=11)
+    ingest(database, REAL_UNFINISHED_TIMES)
+    assert database.best_segments == pytest.approx(REAL_UNFINISHED_TIMES)
+    assert database.total_for(Comparison.PB) == 0.0
 
 
 def test_run_with_no_progress_is_empty_not_wrapped():
@@ -91,16 +110,16 @@ def test_best_segments_take_minimum_per_index():
 def test_best_segments_ignore_missing_times():
     database = db()
     ingest(database, [10.0, 20.0, 30.0])
-    # Died during split 1, so split 0 counts and the rest do not.
+    # Died during split 2, so splits 0 and 1 count and the last does not.
     ingest(database, [4.0, 5.0, 0.0])
-    assert database.best_segments == pytest.approx([4.0, 20.0, 30.0])
+    assert database.best_segments == pytest.approx([4.0, 5.0, 30.0])
 
 
-def test_run_abandoned_in_first_split_records_nothing():
+def test_run_abandoned_after_first_split_still_records_it():
     database = db()
     ingest(database, [10.0, 20.0, 30.0])
-    ingest(database, [4.0, 0.0, 0.0])  # 4.0 was still in progress
-    assert database.best_segments == pytest.approx([10.0, 20.0, 30.0])
+    ingest(database, [4.0, 0.0, 0.0])  # split 0 finished, then the run ended
+    assert database.best_segments == pytest.approx([4.0, 20.0, 30.0])
 
 
 # -- best exits (the logic that was broken) -------------------------------
@@ -117,14 +136,15 @@ def test_best_exits_take_minimum_cumulative():
 def test_partial_run_does_not_poison_later_exits():
     """Regression: summing deltas across a gap produced fake-fast cumulatives.
 
-    A run that only reached split 1 must improve that exit and leave the
-    later ones untouched, rather than making them look impossibly fast.
+    A run that stopped after split 1 must improve the exits it reached and
+    leave the later ones untouched, rather than carrying its deltas across
+    the gap and making those look impossibly fast.
     """
     database = db()
     ingest(database, [10.0, 10.0, 10.0])
-    ingest(database, [1.0, 1.0, 0.0])  # trims to [1, 0, 0]
-    assert database.best_exit_cumulative == pytest.approx([1.0, 20.0, 30.0])
-    assert database.best_exits == pytest.approx([1.0, 19.0, 10.0])
+    ingest(database, [1.0, 1.0, 0.0])  # cumulative 1 / 2 / --
+    assert database.best_exit_cumulative == pytest.approx([1.0, 2.0, 30.0])
+    assert database.best_exits == pytest.approx([1.0, 1.0, 28.0])
 
 
 def test_best_exit_deltas_are_never_negative():

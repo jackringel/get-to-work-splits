@@ -61,8 +61,12 @@ These encode bugs that existed in the original version; breaking them silently c
 - **Best exits are stored cumulatively.** Taking the per-index minimum of cumulative times across
   runs keeps the series non-decreasing (for any run, `cum[i] > cum[i-1] >= min cum[i-1]`), so
   exported deltas are always non-negative. Storing deltas directly loses this guarantee.
-- **The last recorded segment of an unfinished run is discarded.** The game saves the split you're
-  currently on, so that time is partial. `Run.from_game_times` drops it.
+- **Every recorded segment of an unfinished run counts.** The game writes a segment only once you
+  finish it — `Player.log` emits one `Speedrun Mode- Completed:<section>, Split: <time>` line per
+  value in the file, and the section you're on is absent — so there is no partial time to strip.
+  `Run.from_game_times` keeps the whole recorded prefix and only zeroes what follows the first gap.
+  An earlier version dropped the last recorded segment as "in progress", which silently lost a
+  completed split from every save made mid-run; `test_every_written_segment_is_kept` guards it.
 - **PB only updates on complete runs.**
 - **`SplitsTracker` fingerprints its own writes** (`_own_write`) so `Watcher` doesn't ingest them as
   new attempts. Without this, loading a comparison would be recorded as a run — which is exactly why

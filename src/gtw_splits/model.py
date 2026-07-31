@@ -61,20 +61,19 @@ class Run:
 
     @classmethod
     def from_game_times(cls, times: list[float]) -> Run:
-        """Build a run from raw game times, dropping the in-progress segment.
+        """Build a run from raw game times, keeping every completed segment.
 
-        The game writes the split you are *currently* on, so the last recorded
-        segment of an unfinished run is a partial time that must not pollute
-        best segments. Anything from the first empty segment onward is
-        discarded along with the segment immediately before it.
+        The game only writes a segment once you have finished it -- its log
+        emits one ``Completed: <section>`` line per value written, and the
+        section you are currently on is not in the file at all. So every
+        recorded time is a real one and none of them are dropped. Anything
+        from the first empty segment onward is still discarded, so a stray
+        later value can never be read as progress.
         """
         cleaned = [t if is_recorded(t) else 0.0 for t in times]
         for i, value in enumerate(cleaned):
             if not is_recorded(value):
-                # Everything from here on is unrecorded; the segment before
-                # this one was still in progress when the game saved.
-                if i > 0:
-                    cleaned[i - 1] = 0.0
+                # The run stopped here; nothing after this is meaningful.
                 for j in range(i, len(cleaned)):
                     cleaned[j] = 0.0
                 break
