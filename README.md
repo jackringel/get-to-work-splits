@@ -3,11 +3,10 @@
 Better split comparisons for the in-game speedrun timer in
 [Get To Work](https://store.steampowered.com/app/2706170/).
 
-The game's timer only keeps **one** saved set of splits — pressing "save splits" overwrites whatever
-was there. That's fine for chasing a PB, but it means you can't also keep best segments, or see how
-your best exit out of each level compares.
+The game's timer only keeps **one** saved set of splits; pressing "save splits" overwrites whatever
+was there. You can hold a PB, but you can't also compare against best segments/SoB or best exits
 
-This tool turns that one button into a save-everything button. It watches the game's splits file and
+This tool turns "save splits" into a save-everything button. It watches the game's splits file and
 folds every saved run into three comparisons; before a run, you pick which one to load back into the
 game.
 
@@ -15,7 +14,7 @@ game.
 | --- | --- |
 | **Personal Best** | The splits from the run that *finished* fastest. |
 | **Best Segments** | The fastest individual time for each split, across all runs. |
-| **Best Exits** | The fastest time-since-start you've ever left each level. |
+| **Best Exits** | The fastest time you've left each level. |
 
 ## Install
 
@@ -37,7 +36,7 @@ pipx install git+https://github.com/jackringel/get-to-work-splits
 gtw-splits
 ```
 
-That's it — it finds your save folder automatically and opens a window:
+That's it; it finds your save folder automatically and opens a window:
 
 ```
 ┌─ Get To Work Splits ─────────────┐
@@ -59,7 +58,7 @@ display glitch: your best exit from the *final* level is your PB. The two differ
 at every split before the last, which is where the comparison earns its keep.
 
 Leave it open while you play. Hit "save splits" in game after every attempt and all three
-comparisons stay up to date — including after runs you didn't finish. When you want to race a
+comparisons stay up to date, including after runs you didn't finish. When you want to race a
 different comparison, pick it and press **Load into game**.
 
 Unlike the old two-script setup, recording and loading happen in the same program and can't
@@ -97,7 +96,7 @@ slightly optimistic; they correct themselves as you run.
 
 - **Game splits:** `%USERPROFILE%\AppData\LocalLow\Isto\Get To Work\best_split_times.txt`
 - **Your comparisons:** `%LOCALAPPDATA%\gtw-splits\splits.json`
-- **Backups:** `%LOCALAPPDATA%\gtw-splits\backups\` — the game's file is snapshotted every time this
+- **Backups:** `%LOCALAPPDATA%\gtw-splits\backups\` - the game's file is snapshotted every time this
   tool overwrites it, so a mis-click can't lose your splits. The 20 most recent are kept.
 
 Set `GTW_SPLITS_HOME` to relocate the tool's own data.
@@ -106,7 +105,7 @@ Set `GTW_SPLITS_HOME` to relocate the tool's own data.
 
 - Times are per-segment durations. `0.0` means "no time recorded".
 - The game writes the split you're *currently* on when you save, so that partial time is discarded
-  along with everything after it — an abandoned run still contributes its completed splits to best
+  along with everything after it; an abandoned run still contributes its completed splits to best
   segments and best exits without polluting them.
 - Loading a comparison overwrites the game's splits file. That's the intended workflow (your data
   lives in `splits.json`), and a backup is taken first either way.
