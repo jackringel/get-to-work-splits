@@ -161,11 +161,28 @@ def test_best_exits_total_matches_last_cumulative():
     )
 
 
-def test_best_exits_never_slower_than_pb():
+def test_best_exit_total_equals_pb_total():
+    """The best exit from the *final* level is, by definition, the PB.
+
+    Both are the minimum total over complete runs, so they are the same
+    number -- any divergence means one of them is being fed wrong data.
+    """
     database = db()
     ingest(database, [10.0, 10.0, 10.0])
-    ingest(database, [12.0, 8.0, 9.0])
-    assert database.total_for(Comparison.BEST_EXITS) <= database.total_for(Comparison.PB)
+    ingest(database, [12.0, 8.0, 9.0])  # faster overall, different shape
+    ingest(database, [1.0, 1.0, 0.0])  # abandoned; must not affect either
+    assert database.total_for(Comparison.BEST_EXITS) == pytest.approx(
+        database.total_for(Comparison.PB)
+    )
+
+
+def test_intermediate_best_exits_may_beat_pb():
+    """Only the *final* exit is pinned to the PB; earlier ones can be faster."""
+    database = db()
+    ingest(database, [10.0, 10.0, 10.0])
+    ingest(database, [1.0, 50.0, 1.0])
+    assert database.best_exit_cumulative[0] == pytest.approx(1.0)
+    assert database.best_exit_cumulative[0] < database.pb[0]
 
 
 # -- comparison selection -------------------------------------------------

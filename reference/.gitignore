@@ -1,0 +1,5 @@
+# Captured game files are local-only: they are personal save data, and the
+# test suite must stay self-contained. Keep only the docs.
+*
+!.gitignore
+!README.md

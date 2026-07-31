@@ -102,6 +102,29 @@ def prune_backups(root: Path | None = None, keep: int = MAX_BACKUPS) -> int:
     return removed
 
 
+def _repair_legacy_exits(cumulative: list[float], pb: list[float]) -> None:
+    """Restore the best-exit invariants that the legacy data could violate.
+
+    The old best-exit column was produced by arithmetic that summed across
+    gaps, so imported values can be optimistic -- and an exit time faster than
+    anything actually achievable would never be beaten, sticking permanently.
+    Two invariants are enforced in place:
+
+    1. Cumulative exits never decrease.
+    2. The final exit equals the PB total. Both are the fastest *complete* run,
+       so they are the same number by definition.
+    """
+    running_max = 0.0
+    for i, value in enumerate(cumulative):
+        if not is_recorded(value):
+            continue
+        cumulative[i] = max(value, running_max)
+        running_max = cumulative[i]
+
+    if pb and all(is_recorded(v) for v in pb):
+        cumulative[-1] = sum(pb)
+
+
 def migrate_legacy_csv(csv_path: Path, root: Path | None = None) -> SplitsDatabase | None:
     """Import an old ``splits.txt`` into the JSON database.
 
@@ -135,6 +158,8 @@ def migrate_legacy_csv(csv_path: Path, root: Path | None = None) -> SplitsDataba
             continue
         running += value
         cumulative.append(running)
+
+    _repair_legacy_exits(cumulative, pb)
 
     database = SplitsDatabase(
         split_count=len(rows),

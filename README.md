@@ -48,11 +48,15 @@ That's it — it finds your save folder automatically and opens a window:
 │ ┌ Compare against ─────────────┐ │
 │ │ ( ) Personal Best   24:02.45 │ │
 │ │ (•) Best Segments   23:17.71 │ │
-│ │ ( ) Best Exits      23:44.09 │ │
+│ │ ( ) Best Exits      24:02.45 │ │
 │ └──────────────────────────────┘ │
 │                 [ Load into game]│
 └──────────────────────────────────┘
 ```
+
+Best Exits always totals the same as your PB, which is correct rather than a
+display glitch: your best exit from the *final* level is your PB. The two differ
+at every split before the last, which is where the comparison earns its keep.
 
 Leave it open while you play. Hit "save splits" in game after every attempt and all three
 comparisons stay up to date — including after runs you didn't finish. When you want to race a
@@ -85,7 +89,9 @@ gtw-splits import-legacy path/to/splits.txt
 
 Best-exit times are recalculated during the import, because the old column was produced by
 arithmetic that summed across gaps in unfinished runs and could record exits faster than anything
-actually run.
+actually run. An exit time nothing can beat would stick permanently, so the import forces cumulative
+exits to increase and pins the final one to your PB total. Imported intermediate exits may still be
+slightly optimistic; they correct themselves as you run.
 
 ## Where things are stored
 
