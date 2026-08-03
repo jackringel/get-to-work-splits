@@ -34,6 +34,9 @@ Layered, each module depending only on those above it:
 - `locate.py` — auto-detect the game save folder and this tool's data folder.
 - `store.py` — JSON persistence, backup pruning, legacy CSV migration.
 - `tracker.py` — `SplitsTracker` (database + game file) and `Watcher` (polling thread).
+- `version.py` — leaf module, no internal deps. Reports the running version and, in a checkout, the
+  commit. Exists because an editable install plus a long-lived GUI means the code on disk and the
+  code running can differ; the title bar has to make that visible.
 - `cli.py` / `gui.py` — entry points. `gui.py` imports from `cli.py`, never the reverse.
 
 ## Data formats
@@ -71,7 +74,19 @@ These encode bugs that existed in the original version; breaking them silently c
 - **`SplitsTracker` fingerprints its own writes** (`_own_write`) so `Watcher` doesn't ingest them as
   new attempts. Without this, loading a comparison would be recorded as a run — which is exactly why
   the original two scripts couldn't be run at the same time. `test_poll_ignores_our_own_write`
-  guards it; anything that changes the write path must keep it passing.
+  guards it; anything that changes the write path must keep it passing. The write is also mirrored
+  to `last_write.txt` so the guard survives a restart: a comparison left in the file by an earlier
+  session is not a run, and best exits ingested as one would install an unbeatable fake PB.
+- **Recording is a switch, not a heuristic.** `SplitsTracker.recording` (persisted in
+  `settings.json`) gates every path into the database, enforced in the single `_ingest_text` funnel.
+  A modded, cheated or test attempt is a real save and looks like one; only the user can say which
+  runs count, so nothing anywhere tries to guess from the times themselves. A paused save is
+  reported with an `ignored_reason` rather than dropped silently — an ignored save must not look
+  like a missed one.
+- **Nothing in the game file is ever overwritten unread.** `SplitsTracker.__init__` leaves
+  `_fingerprint` unset so the first poll ingests a run saved before the process started, and
+  `load_into_game` ingests before it writes. Both paths existed as silent data loss: save a run,
+  open the tool, hit load, and the run was gone.
 
 ## Design decisions
 

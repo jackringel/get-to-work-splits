@@ -55,18 +55,19 @@ gtw-splits
 That's it; it finds your save folder automatically and opens a window:
 
 ```
-┌─ Get To Work Splits ─────────────┐
-│ ...\Isto\Get To Work\best_spl... │
-│ New PB! -2.41s                   │
-│ Recorded from your last save.    │
-│                                  │
-│ ┌ Compare against ─────────────┐ │
-│ │ ( ) Personal Best   24:02.45 │ │
-│ │ (•) Best Segments   23:17.71 │ │
-│ │ ( ) Best Exits      24:02.45 │ │
-│ └──────────────────────────────┘ │
-│                 [ Load into game]│
-└──────────────────────────────────┘
+┌─ Get To Work Splits -- 1.0.0 (9d83c0e) ─┐
+│ ...\Isto\Get To Work\best_spl...        │
+│ New PB! -2.41s                          │
+│ Recorded from your last save.           │
+│ [x] Record saved runs                   │
+│                                         │
+│ ┌ Compare against ─────────────┐        │
+│ │ ( ) Personal Best   24:02.45 │        │
+│ │ (•) Best Segments   23:17.71 │        │
+│ │ ( ) Best Exits      24:02.45 │        │
+│ └──────────────────────────────┘        │
+│                        [ Load into game]│
+└─────────────────────────────────────────┘
 ```
 
 Best Exits always totals the same as your PB, which is correct rather than a
@@ -80,16 +81,42 @@ different comparison, pick it and press **Load into game**.
 Unlike the old two-script setup, recording and loading happen in the same program and can't
 interfere with each other, so there's nothing to start and stop between runs.
 
+### Runs you don't want kept
+
+Testing something, running a mod, or messing about with cheats? Untick **Record saved runs**. Saves
+are still read and reported, but nothing goes into your comparisons, and loading still works — so
+you can race against your real PB while the attempts themselves don't count. The setting is
+remembered until you turn it back on, and a paused window says so instead of looking idle.
+
+Nothing else can put times in: the only thing this tool reads is `best_split_times.txt`, and the
+game only writes that when you save your splits. There's no way for a run you never saved to end up
+in your comparisons.
+
+### Which version is running
+
+The window title carries the version and the commit it was started from, e.g. `1.0.0 (9d83c0e)`, or
+`9d83c0e-dirty` with uncommitted edits in the checkout. `gtw-splits status` and `gtw-splits
+--version` print the same thing.
+
+This matters more than it looks. The install is editable, so the code that runs is whatever is in
+your checkout — but only for a process started *after* you changed it. A window left open keeps
+running the code it was launched with no matter what you edit, pull, or commit. If the title doesn't
+name the commit you expect, close the window and reopen it; the GUI runs as `pythonw.exe`, so check
+for that name and not just `python.exe`.
+
 ### Command line
 
 For headless use or scripting:
 
 ```
-gtw-splits status                  # show the three comparisons
+gtw-splits status                  # version, paths, and the three comparisons
 gtw-splits watch                   # record saved runs, no GUI
 gtw-splits load best-segments      # write a comparison into the game
 gtw-splits load pb
 gtw-splits load best-exits
+gtw-splits record off              # stop keeping saved runs (and `record on`)
+gtw-splits load pb --no-record     # or just this once; `watch` takes it too
+gtw-splits --version
 ```
 
 Add `--game-file <path>` if auto-detection can't find your install.
@@ -114,6 +141,9 @@ slightly optimistic; they correct themselves as you run.
 - **Your comparisons:** `%LOCALAPPDATA%\gtw-splits\splits.json`
 - **Backups:** `%LOCALAPPDATA%\gtw-splits\backups\` - the game's file is snapshotted every time this
   tool overwrites it, so a mis-click can't lose your splits. The 20 most recent are kept.
+- **Settings:** `%LOCALAPPDATA%\gtw-splits\settings.json` - the game file path and whether recording
+  is on. `last_write.txt` next to it is a copy of the last comparison written into the game, so a
+  later session can tell that file apart from a run you saved.
 
 Set `GTW_SPLITS_HOME` to relocate the tool's own data.
 

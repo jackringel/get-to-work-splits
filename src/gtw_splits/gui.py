@@ -9,10 +9,11 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import store
-from .cli import SETTING_GAME_FILE, resolve_game_file
+from .cli import resolve_game_file
 from .gamefile import GAME_FILE_NAME
 from .model import Comparison, IngestResult, format_time
 from .tracker import SplitsTracker, Watcher
+from .version import version_string
 
 #: How often the UI drains results posted by the watcher thread.
 UI_POLL_MS = 150
@@ -21,8 +22,10 @@ UI_POLL_MS = 150
 class SplitsApp(ttk.Frame):
     def __init__(self, master: tk.Tk, game_file: Path) -> None:
         super().__init__(master, padding=12)
-        self.master.title("Get To Work Splits")
-        self.master.minsize(430, 300)
+        # The running commit, not just the version: this window keeps running
+        # the code it was started with, so a stale one has to be visible.
+        self.master.title(f"Get To Work Splits  --  {version_string()}")
+        self.master.minsize(430, 330)
         self.grid(sticky="nsew")
         master.columnconfigure(0, weight=1)
         master.rowconfigure(0, weight=1)
@@ -30,11 +33,13 @@ class SplitsApp(ttk.Frame):
 
         self.tracker = SplitsTracker(game_file)
         self.selected = tk.StringVar(value=Comparison.PB.value)
+        self.recording = tk.BooleanVar(value=self.tracker.recording)
         self._results: queue.Queue[IngestResult] = queue.Queue()
         self._totals: dict[Comparison, ttk.Label] = {}
 
         self._build()
         self._refresh_totals()
+        self._show_idle_status()
 
         self.watcher = Watcher(self.tracker, self._results.put)
         self.watcher.start()
@@ -55,16 +60,23 @@ class SplitsApp(ttk.Frame):
         )
         self._update_path_label()
 
-        self.status_label = ttk.Label(self, text="Watching for saves...", font=("", 10, "bold"))
+        self.status_label = ttk.Label(self, text="", font=("", 10, "bold"))
         self.status_label.grid(row=1, column=0, sticky="w", pady=(10, 2))
 
         self.detail_label = ttk.Label(self, text="Save your splits in game after each run.")
         self.detail_label.grid(row=2, column=0, sticky="w")
 
-        ttk.Separator(self).grid(row=3, column=0, sticky="ew", pady=12)
+        ttk.Checkbutton(
+            self,
+            text="Record saved runs",
+            variable=self.recording,
+            command=self._toggle_recording,
+        ).grid(row=3, column=0, sticky="w", pady=(8, 0))
+
+        ttk.Separator(self).grid(row=4, column=0, sticky="ew", pady=12)
 
         group = ttk.LabelFrame(self, text="Compare against", padding=10)
-        group.grid(row=4, column=0, sticky="ew")
+        group.grid(row=5, column=0, sticky="ew")
         group.columnconfigure(1, weight=1)
 
         for row, comparison in enumerate(Comparison):
@@ -79,7 +91,7 @@ class SplitsApp(ttk.Frame):
             self._totals[comparison] = total
 
         buttons = ttk.Frame(self)
-        buttons.grid(row=5, column=0, sticky="ew", pady=(12, 0))
+        buttons.grid(row=6, column=0, sticky="ew", pady=(12, 0))
         buttons.columnconfigure(0, weight=1)
         ttk.Label(
             buttons,
@@ -101,6 +113,19 @@ class SplitsApp(ttk.Frame):
 
     # -- behaviour ---------------------------------------------------------
 
+    def _show_idle_status(self) -> None:
+        """Say what the tool will do with the next save, before there is one."""
+        if self.tracker.recording:
+            self.status_label.configure(text="Watching for saves...")
+            self.detail_label.configure(text="Save your splits in game after each run.")
+        else:
+            self.status_label.configure(text="Recording paused")
+            self.detail_label.configure(text="Saves are ignored. Loading still works.")
+
+    def _toggle_recording(self) -> None:
+        self.tracker.set_recording(self.recording.get())
+        self._show_idle_status()
+
     def _refresh_totals(self) -> None:
         for comparison, label in self._totals.items():
             total = self.tracker.database.total_for(comparison)
@@ -114,8 +139,14 @@ class SplitsApp(ttk.Frame):
             except queue.Empty:
                 break
         if latest is not None:
+            if latest.ignored_reason and not self.tracker.recording:
+                detail = "Turn recording on to keep runs like this one."
+            elif latest.changed:
+                detail = "Recorded from your last save."
+            else:
+                detail = "Nothing new from your last save."
             self.status_label.configure(text=latest.summary())
-            self.detail_label.configure(text="Recorded from your last save.")
+            self.detail_label.configure(text=detail)
             self._refresh_totals()
             self._update_path_label()
         self.after(UI_POLL_MS, self._drain_results)
@@ -132,15 +163,23 @@ class SplitsApp(ttk.Frame):
         self.watcher.stop()
         self.tracker = SplitsTracker(Path(chosen))
         settings = store.load_settings()
-        settings[SETTING_GAME_FILE] = chosen
+        settings[store.SETTING_GAME_FILE] = chosen
         store.save_settings(settings)
         self.watcher = Watcher(self.tracker, self._results.put)
         self.watcher.start()
+        self.recording.set(self.tracker.recording)
         self._update_path_label()
         self._refresh_totals()
+        self._show_idle_status()
 
     def _load(self) -> None:
         comparison = Comparison(self.selected.get())
+
+        # A run saved in the last half-second is about to be overwritten;
+        # record it first so the prompt below sees the true totals too.
+        if self.tracker.ingest_current_file().changed:
+            self._refresh_totals()
+
         total = self.tracker.database.total_for(comparison)
         if not total:
             proceed = messagebox.askyesno(

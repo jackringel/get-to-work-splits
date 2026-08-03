@@ -34,22 +34,73 @@ class SplitsTracker:
     Writes made by this tool are fingerprinted so the watcher does not read its
     own output back in as if it were a newly saved run. That is what allows
     watching and loading to coexist in one process -- the original two scripts
-    had to be run one at a time precisely because they lacked this.
+    had to be run one at a time precisely because they lacked this. The text
+    written is remembered on disk as well as in memory, so the guard still
+    holds in the next session, when the file may be a comparison this one
+    loaded.
     """
 
     def __init__(self, game_file: Path, root: Path | None = None) -> None:
         self.game_file = Path(game_file)
         self.root = root
+        #: While false, saves are read but not recorded. Only you can tell a
+        #: modded or cheated attempt from a real one, so this is a switch
+        #: rather than a guess about which times look plausible.
+        self.recording: bool = bool(
+            store.load_settings(root).get(store.SETTING_RECORDING, True)
+        )
         self.database: SplitsDatabase = store.load_database(root)
-        self._own_write: str | None = None
-        self._fingerprint = _Fingerprint.of(self.game_file)
+        self._own_write: str | None = store.load_last_write(root)
+        # Deliberately unset: the game may have saved a run before this process
+        # started, and the first poll has to pick it up rather than treat the
+        # file as already seen. A file we wrote ourselves is skipped by the
+        # ``_own_write`` check instead.
+        self._fingerprint: _Fingerprint | None = None
         self._lock = threading.Lock()
+
+    def set_recording(self, enabled: bool) -> None:
+        """Turn recording on or off, and remember it for the next session."""
+        self.recording = bool(enabled)
+        settings = store.load_settings(self.root)
+        settings[store.SETTING_RECORDING] = self.recording
+        store.save_settings(settings, self.root)
 
     # -- reading -----------------------------------------------------------
 
     def ingest_current_file(self) -> IngestResult:
-        """Read the game file now and fold it into the database."""
-        times = gamefile.read_times(self.game_file)
+        """Read the game file now and fold it into the database.
+
+        Never raises: an unreadable or half-written file is reported as an
+        ignored result, because the callers of this are workflows (starting up,
+        loading a comparison) that must carry on regardless.
+        """
+        self._fingerprint = _Fingerprint.of(self.game_file)
+        try:
+            text = self.game_file.read_text(encoding="utf-8-sig")
+        except OSError:
+            return IngestResult(ignored_reason="No splits file to read yet")
+        result = self._ingest_text(text)
+        if result is None:
+            # Either our own comparison or a half-written save; neither is a run.
+            return IngestResult(ignored_reason="Nothing new in the splits file")
+        return result
+
+    def _ingest_text(self, text: str) -> IngestResult | None:
+        """Fold splits-file text into the database, or ``None`` if it is ours."""
+        if self._own_write is not None and text == self._own_write:
+            return None
+        if not self.recording:
+            # Reported rather than silent: a save that is being deliberately
+            # ignored should still show up as one, not look like a missed save.
+            return IngestResult(ignored_reason="Recording paused -- not saved")
+
+        try:
+            times = gamefile.parse_times(text)
+        except gamefile.GameFileError:
+            # Caught mid-write; force the next poll to look again.
+            self._fingerprint = None
+            return None
+
         with self._lock:
             result = self.database.ingest(Run.from_game_times(times))
             if result.changed:
@@ -72,26 +123,18 @@ class SplitsTracker:
         except OSError:
             return None
 
-        if self._own_write is not None and text == self._own_write:
-            return None
-
-        try:
-            times = gamefile.parse_times(text)
-        except gamefile.GameFileError:
-            # Caught mid-write; the next poll will pick up the finished file.
-            self._fingerprint = None
-            return None
-
-        with self._lock:
-            result = self.database.ingest(Run.from_game_times(times))
-            if result.changed:
-                store.save_database(self.database, self.root)
-        return result
+        return self._ingest_text(text)
 
     # -- writing -----------------------------------------------------------
 
     def load_into_game(self, comparison: Comparison) -> Path | None:
-        """Write a comparison into the game file. Returns the backup path."""
+        """Write a comparison into the game file. Returns the backup path.
+
+        Whatever the file holds is recorded first. The game may have saved a
+        run the watcher has not polled yet -- or may not be running at all --
+        and the write below would otherwise destroy it.
+        """
+        self.ingest_current_file()
         with self._lock:
             times = self.database.segments_for(comparison)
         if not times:
@@ -101,6 +144,7 @@ class SplitsTracker:
         store.prune_backups(self.root)
         self.game_file.parent.mkdir(parents=True, exist_ok=True)
         self._own_write = gamefile.write_times(self.game_file, times)
+        store.save_last_write(self._own_write, self.root)
         self._fingerprint = _Fingerprint.of(self.game_file)
         return backup
 

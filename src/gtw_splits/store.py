@@ -13,9 +13,16 @@ SCHEMA_VERSION = 1
 DATABASE_NAME = "splits.json"
 SETTINGS_NAME = "settings.json"
 BACKUP_DIR_NAME = "backups"
+#: Copy of the last comparison this tool wrote into the game file, so a later
+#: session can still recognise it as ours rather than as a saved attempt.
+LAST_WRITE_NAME = "last_write.txt"
 
 #: The 3-column CSV written by the original update_personal_splits.py.
 LEGACY_NAME = "splits.txt"
+
+#: Keys in settings.json.
+SETTING_GAME_FILE = "game_file"
+SETTING_RECORDING = "recording"
 
 #: How many game-file snapshots to keep before pruning the oldest.
 MAX_BACKUPS = 20
@@ -63,6 +70,29 @@ def save_database(database: SplitsDatabase, root: Path | None = None) -> Path:
     }
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
+def last_write_path(root: Path | None = None) -> Path:
+    return (root or data_dir()) / LAST_WRITE_NAME
+
+
+def load_last_write(root: Path | None = None) -> str | None:
+    """The exact text this tool last wrote into the game file, if any."""
+    path = last_write_path(root)
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def save_last_write(text: str, root: Path | None = None) -> Path:
+    """Remember a write so it is not read back in as an attempt later."""
+    path = last_write_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".txt.tmp")
+    temporary.write_text(text, encoding="utf-8", newline="")
     temporary.replace(path)
     return path
 
