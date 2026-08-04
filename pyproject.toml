@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "get-to-work-splits"
-version = "1.2.1"
+# Read from gtw_splits.__version__ -- see [tool.setuptools.dynamic] below.
+dynamic = ["version"]
 description = "Better split comparisons for the Get To Work in-game speedrun timer"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,6 +31,14 @@ gtw-splits-gui = "gtw_splits.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# One source of truth for the version. It was duplicated here and in
+# __init__.py, with nothing keeping them in step -- and the number the window
+# reports is the one in the package, so a bump missed here would ship metadata
+# that disagreed with the running tool. setuptools reads the attribute
+# statically, so this does not import the package at build time.
+[tool.setuptools.dynamic]
+version = { attr = "gtw_splits.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

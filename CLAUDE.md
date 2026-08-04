@@ -36,7 +36,10 @@ Layered, each module depending only on those above it:
 - `tracker.py` — `SplitsTracker` (database + game file) and `Watcher` (polling thread).
 - `version.py` — leaf module, no internal deps. Reports the running version and, in a checkout, the
   commit. Exists because an editable install plus a long-lived GUI means the code on disk and the
-  code running can differ; the title bar has to make that visible.
+  code running can differ; the title bar has to make that visible. The number itself lives only in
+  `__init__.py`; `pyproject.toml` declares `dynamic = ["version"]` and reads that attribute, so bump
+  it in one place. `store.SCHEMA_VERSION` is separate and governs the on-disk format — bump that
+  only when the shape of `splits.json` changes.
 - `cli.py` / `gui.py` — entry points. `gui.py` imports from `cli.py`, never the reverse.
 
 ## Data formats
