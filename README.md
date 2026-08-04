@@ -55,7 +55,7 @@ gtw-splits
 That's it; it finds your save folder automatically and opens a window:
 
 ```
-┌─ Get To Work Splits -- 1.0.0 (9d83c0e) ─┐
+┌─ Get To Work Splits -- 1.2.1 (7e062ab) ─┐
 │ ...\Isto\Get To Work\best_spl...        │
 │ New PB! -2.41s                          │
 │ Recorded from your last save.           │
@@ -94,7 +94,7 @@ in your comparisons.
 
 ### Which version is running
 
-The window title carries the version and the commit it was started from, e.g. `1.0.0 (9d83c0e)`, or
+The window title carries the version and the commit it was started from, e.g. `1.2.1 (7e062ab)`, or
 `9d83c0e-dirty` with uncommitted edits in the checkout. `gtw-splits status` and `gtw-splits
 --version` print the same thing.
 

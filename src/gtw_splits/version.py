@@ -46,6 +46,6 @@ def source_revision() -> str | None:
 
 
 def version_string() -> str:
-    """``1.0.0 (9d83c0e)`` in a checkout, plain ``1.0.0`` otherwise."""
+    """``1.2.1 (7e062ab)`` in a checkout, plain ``1.2.1`` otherwise."""
     revision = source_revision()
     return f"{__version__} ({revision})" if revision else __version__
