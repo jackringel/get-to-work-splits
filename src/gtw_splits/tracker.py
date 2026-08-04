@@ -33,11 +33,12 @@ class SplitsTracker:
 
     Writes made by this tool are fingerprinted so the watcher does not read its
     own output back in as if it were a newly saved run. That is what allows
-    watching and loading to coexist in one process -- the original two scripts
-    had to be run one at a time precisely because they lacked this. The text
-    written is remembered on disk as well as in memory, so the guard still
-    holds in the next session, when the file may be a comparison this one
-    loaded.
+    watching and loading to coexist -- the original two scripts had to be run
+    one at a time precisely because they lacked this. The text written is
+    remembered on disk as well as in memory, and checked in both places, so the
+    guard holds across a restart *and* across a second instance running at the
+    same time. Either way the file may hold a comparison this tool put there,
+    and neither is a run.
     """
 
     def __init__(self, game_file: Path, root: Path | None = None) -> None:
@@ -85,9 +86,27 @@ class SplitsTracker:
             return IngestResult(ignored_reason="Nothing new in the splits file")
         return result
 
+    def _is_own_write(self, text: str) -> bool:
+        """True if ``text`` is a comparison this tool wrote, in any session.
+
+        The in-memory copy only knows about writes *this* instance made. Nothing
+        stops the window being opened twice, and a second instance writing a
+        comparison looks exactly like a newly saved run to the first -- which
+        then records best exits as an attempt and installs an unbeatable fake
+        PB. Falling back to the record on disk closes that, at the cost of one
+        small read, and only when the file has really changed underneath us.
+        """
+        if self._own_write is not None and text == self._own_write:
+            return True
+        recorded = store.load_last_write(self.root)
+        if recorded is not None and text == recorded:
+            self._own_write = recorded
+            return True
+        return False
+
     def _ingest_text(self, text: str) -> IngestResult | None:
         """Fold splits-file text into the database, or ``None`` if it is ours."""
-        if self._own_write is not None and text == self._own_write:
+        if self._is_own_write(text):
             return None
         if not self.recording:
             # Reported rather than silent: a save that is being deliberately

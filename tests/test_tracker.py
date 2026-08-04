@@ -92,6 +92,40 @@ def test_a_loaded_comparison_is_not_ingested_after_restart(real_game_file, data_
     assert reopened.database.pb == pytest.approx(before)
 
 
+def test_a_second_instance_does_not_ingest_the_first_instances_write(
+    real_game_file, data_root
+):
+    """Two open windows must not feed each other's comparisons back as runs.
+
+    The in-memory guard only covers writes the *same* instance made, so a
+    second window loading a comparison looked like a newly saved run to the
+    first. Observed in the wild: a loaded best-exits series was recorded as an
+    attempt and, reaching further than the PB of the day did, installed a PB no
+    real run could beat.
+    """
+    watching = SplitsTracker(real_game_file, root=data_root)  # opened first
+    watching.ingest_current_file()  # a complete run
+    part_run = [t * 0.5 for t in REAL_TIMES[:4]] + [0.0] * 7
+    gamefile.write_times(real_game_file, part_run)  # then a faster part-run
+    watching.poll()
+
+    loading = SplitsTracker(real_game_file, root=data_root)  # opened second
+    pb_before = list(watching.database.pb)
+    segments_before = list(watching.database.best_segments)
+
+    loading.load_into_game(Comparison.BEST_EXITS)
+    # Exits splice both runs, so the file now holds neither of them. Without a
+    # real change on disk the poll below would return None for the wrong reason.
+    assert gamefile.read_times(real_game_file) != pytest.approx(part_run)
+
+    # The load-bearing assertion: a comparison is not an attempt, whoever wrote
+    # it. What it would have gone on to corrupt depends on the data; that it is
+    # read as a run at all is the bug.
+    assert watching.poll() is None
+    assert watching.database.pb == pytest.approx(pb_before)
+    assert watching.database.best_segments == pytest.approx(segments_before)
+
+
 def test_paused_recording_reads_a_save_without_keeping_it(real_game_file, data_root):
     """A modded or cheated attempt is still a save; only you can tell it apart."""
     tracker = SplitsTracker(real_game_file, root=data_root)

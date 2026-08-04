@@ -82,8 +82,12 @@ These encode bugs that existed in the original version; breaking them silently c
   new attempts. Without this, loading a comparison would be recorded as a run — which is exactly why
   the original two scripts couldn't be run at the same time. `test_poll_ignores_our_own_write`
   guards it; anything that changes the write path must keep it passing. The write is also mirrored
-  to `last_write.txt` so the guard survives a restart: a comparison left in the file by an earlier
-  session is not a run, and best exits ingested as one would install an unbeatable fake PB.
+  to `last_write.txt`, and `_is_own_write` checks **both** memory and disk. Memory alone only covers
+  writes this instance made, so a second window loading a comparison looked like a saved run to the
+  first — which is how a spliced best-exits series got recorded as an attempt and installed a fake
+  PB. Disk alone would not survive the file being rewritten between polls. Both paths are needed:
+  `test_a_loaded_comparison_is_not_ingested_after_restart` and
+  `test_a_second_instance_does_not_ingest_the_first_instances_write`.
 - **Recording is a switch, not a heuristic.** `SplitsTracker.recording` (persisted in
   `settings.json`) gates every path into the database, enforced in the single `_ingest_text` funnel.
   A modded, cheated or test attempt is a real save and looks like one; only the user can say which
