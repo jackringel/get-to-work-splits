@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import store
 from .locate import data_dir, find_game_file
-from .model import Comparison, format_time
+from .model import Comparison, format_progress
 from .tracker import SplitsTracker, Watcher
 from .version import version_string
 
@@ -46,10 +46,10 @@ def _print_status(tracker: SplitsTracker) -> None:
     print(f"Data dir:  {data_dir()}")
     print(f"Recording: {'on' if tracker.recording else 'PAUSED'}")
     print()
+    database = tracker.database
     for comparison in Comparison:
-        total = tracker.database.total_for(comparison)
-        state = format_time(total) if total else "incomplete"
-        print(f"  {comparison.label:<15} {state}")
+        total, reach = database.progress_for(comparison)
+        print(f"  {comparison.label:<15} {format_progress(total, reach, database.split_count)}")
 
 
 def _command_status(args: argparse.Namespace) -> int:
@@ -94,11 +94,13 @@ def _command_load(args: argparse.Namespace) -> int:
     if recorded.changed:
         print(f"Recorded from the current file: {recorded.summary()}")
 
-    total = tracker.database.total_for(comparison)
-    if not total and comparison is not Comparison.BEST_SEGMENTS:
+    database = tracker.database
+    total, reach = database.progress_for(comparison)
+    if reach < database.split_count and comparison is not Comparison.BEST_SEGMENTS:
         print(f"Warning: {comparison.label} is incomplete.", file=sys.stderr)
     backup = tracker.load_into_game(comparison)
-    print(f"Loaded {comparison.label} ({format_time(total)}) into {tracker.game_file}")
+    shown = format_progress(total, reach, database.split_count)
+    print(f"Loaded {comparison.label} ({shown}) into {tracker.game_file}")
     if backup:
         print(f"Previous file backed up to {backup}")
     return 0

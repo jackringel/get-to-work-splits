@@ -70,7 +70,14 @@ These encode bugs that existed in the original version; breaking them silently c
   `Run.from_game_times` keeps the whole recorded prefix and only zeroes what follows the first gap.
   An earlier version dropped the last recorded segment as "in progress", which silently lost a
   completed split from every save made mid-run; `test_every_written_segment_is_kept` guards it.
-- **PB only updates on complete runs.**
+- **PB is the furthest attempt, then the fastest of those.** Ranked by
+  `Run.recorded_prefix` first and `Run.reached_total` second. A complete run has the longest prefix
+  there is, so it always outranks a partial one and no partial can ever displace it — "PB only
+  updates on complete runs" is the special case of this rule, not an exception to it. Before the
+  first completion the slot holds the best attempt so far instead of sitting empty. `pb_delta` is
+  only meaningful between attempts that reached the same split, so it is reported as `0.0` when the
+  reach grows. `total_for` still refuses to total an incomplete comparison; `progress_for` returns
+  `(time, reach)` for display.
 - **`SplitsTracker` fingerprints its own writes** (`_own_write`) so `Watcher` doesn't ingest them as
   new attempts. Without this, loading a comparison would be recorded as a run — which is exactly why
   the original two scripts couldn't be run at the same time. `test_poll_ignores_our_own_write`

@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import store
 from .cli import resolve_game_file
 from .gamefile import GAME_FILE_NAME
-from .model import Comparison, IngestResult, format_time
+from .model import Comparison, IngestResult, format_progress
 from .tracker import SplitsTracker, Watcher
 from .version import version_string
 
@@ -127,9 +127,10 @@ class SplitsApp(ttk.Frame):
         self._show_idle_status()
 
     def _refresh_totals(self) -> None:
+        database = self.tracker.database
         for comparison, label in self._totals.items():
-            total = self.tracker.database.total_for(comparison)
-            label.configure(text=format_time(total) if total else "incomplete")
+            total, reach = database.progress_for(comparison)
+            label.configure(text=format_progress(total, reach, database.split_count))
 
     def _drain_results(self) -> None:
         latest: IngestResult | None = None

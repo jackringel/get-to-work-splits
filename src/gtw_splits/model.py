@@ -53,6 +53,19 @@ def format_delta(seconds: float) -> str:
     return f"{seconds:+.2f}s"
 
 
+def format_progress(total: float, reach: int, split_count: int) -> str:
+    """``2:21.91  (2/11)`` while incomplete, plain ``12:38.66`` once finished.
+
+    Showing the reach alongside the time keeps a partial total from reading as
+    a finishing time, which is the only way the two can be confused.
+    """
+    if reach <= 0:
+        return "--"
+    if reach >= split_count:
+        return format_time(total)
+    return f"{format_time(total)}  ({reach}/{split_count})"
+
+
 @dataclass(frozen=True)
 class Run:
     """One attempt as saved by the game."""
@@ -102,6 +115,17 @@ class Run:
         """Final time, or ``0.0`` if the run was not finished."""
         return sum(self.segments) if self.is_complete else 0.0
 
+    @property
+    def reached_total(self) -> float:
+        """Time to the end of the recorded prefix, ``0.0`` if it is empty.
+
+        Unlike ``total`` this is defined for an unfinished run: it is how long
+        the attempt took to get as far as it got. Ranking two attempts by reach
+        and then by this is what makes an incomplete run comparable at all.
+        """
+        prefix = self.recorded_prefix
+        return self.cumulative()[prefix - 1] if prefix else 0.0
+
     def cumulative(self) -> list[float]:
         """Time-since-start at each split, ``0.0`` past the recorded prefix.
 
@@ -122,6 +146,9 @@ class IngestResult:
 
     is_new_pb: bool = False
     pb_delta: float = 0.0
+    #: True when the new best is an unfinished attempt, so it can be reported
+    #: as progress rather than announced as a finished personal best.
+    pb_is_partial: bool = False
     improved_segments: tuple[int, ...] = ()
     improved_exits: tuple[int, ...] = ()
     ignored_reason: str | None = None
@@ -137,8 +164,14 @@ class IngestResult:
             return "No improvements"
         parts = []
         if self.is_new_pb:
-            # No delta to show on the very first complete run.
-            parts.append(f"New PB! {format_delta(self.pb_delta)}" if self.pb_delta else "First PB!")
+            # An unfinished attempt is real progress, but calling it a PB would
+            # hide that the run never reached the end.
+            label = "best attempt" if self.pb_is_partial else "PB"
+            if self.pb_delta:
+                parts.append(f"New {label}! {format_delta(self.pb_delta)}")
+            else:
+                # No delta means the reach grew, so there is nothing to compare.
+                parts.append("Further than ever!" if self.pb_is_partial else "First PB!")
         if self.improved_segments:
             n = len(self.improved_segments)
             parts.append(f"{n} best segment{'s' if n != 1 else ''}")
@@ -206,6 +239,16 @@ class SplitsDatabase:
             return 0.0
         return sum(segments)
 
+    def progress_for(self, comparison: Comparison) -> tuple[float, int]:
+        """Time so far and how many splits of ``comparison`` have times.
+
+        Where ``total_for`` refuses to total an incomplete comparison, this
+        describes one: the reach travels with the time, so a partial total can
+        be displayed without being mistaken for a finishing time.
+        """
+        run = Run(tuple(self.segments_for(comparison)))
+        return run.reached_total, run.recorded_prefix
+
     def ingest(self, run: Run) -> IngestResult:
         """Fold a newly saved run into all three comparisons."""
         if len(run) != self.split_count:
@@ -213,14 +256,24 @@ class SplitsDatabase:
         if run.recorded_prefix == 0:
             return IngestResult(ignored_reason="No completed splits in save")
 
-        is_new_pb = False
+        # PB is the attempt that got furthest, and the fastest of those that
+        # got equally far. A complete run has the longest prefix there is, so
+        # it always outranks a partial one and a partial can never displace it
+        # -- "PB only updates on complete runs" is the special case of this
+        # rule, not an exception to it. Until the first completion the slot
+        # holds the best attempt so far rather than sitting empty.
+        best = Run(tuple(self.pb))
+        reach, previous_reach = run.recorded_prefix, best.recorded_prefix
+        is_new_pb = reach > previous_reach or (
+            reach == previous_reach and run.reached_total < best.reached_total
+        )
         pb_delta = 0.0
-        if run.is_complete:
-            current_pb = sum(self.pb) if all(is_recorded(v) for v in self.pb) else 0.0
-            if not is_recorded(current_pb) or run.total < current_pb:
-                is_new_pb = True
-                pb_delta = run.total - current_pb if is_recorded(current_pb) else 0.0
-                self.pb = list(run.segments)
+        if is_new_pb:
+            # Only comparable when both attempts reached the same split; across
+            # different reaches the difference in seconds means nothing.
+            if reach == previous_reach:
+                pb_delta = run.reached_total - best.reached_total
+            self.pb = list(run.segments)
 
         improved_segments = []
         for i in range(self.split_count):
@@ -246,6 +299,7 @@ class SplitsDatabase:
         return IngestResult(
             is_new_pb=is_new_pb,
             pb_delta=pb_delta,
+            pb_is_partial=is_new_pb and not run.is_complete,
             improved_segments=tuple(improved_segments),
             improved_exits=tuple(improved_exits),
         )

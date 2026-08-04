@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from gtw_splits.model import Comparison, Run, SplitsDatabase, format_time
+from gtw_splits.model import (
+    Comparison,
+    Run,
+    SplitsDatabase,
+    format_progress,
+    format_time,
+)
 
 from .conftest import REAL_TIMES, REAL_UNFINISHED_TIMES
 
@@ -91,10 +97,48 @@ def test_pb_replaced_by_faster_run_with_delta():
     assert result.pb_delta == pytest.approx(-3.0)
 
 
-def test_incomplete_run_never_sets_pb():
+def test_incomplete_run_sets_a_provisional_pb_with_no_total():
+    """The slot fills with the best attempt so far, but it is not a finish."""
+    database = db()
+    result = ingest(database, [1.0, 1.0, 0.0])
+    assert result.is_new_pb and result.pb_is_partial
+    assert database.pb == pytest.approx([1.0, 1.0, 0.0])
+    assert database.total_for(Comparison.PB) == 0.0
+    assert database.progress_for(Comparison.PB) == (pytest.approx(2.0), 2)
+
+
+def test_partial_run_never_displaces_a_complete_pb():
+    """The whole point of ranking by reach first: a finish outranks any partial."""
+    database = db()
+    ingest(database, [10.0, 10.0, 10.0])
+    result = ingest(database, [1.0, 1.0, 0.0])  # far faster, but never finished
+    assert not result.is_new_pb
+    assert database.pb == pytest.approx([10.0, 10.0, 10.0])
+
+
+def test_further_attempt_beats_a_faster_shorter_one():
+    database = db()
+    ingest(database, [1.0, 0.0, 0.0])
+    result = ingest(database, [50.0, 50.0, 0.0])
+    assert result.is_new_pb and result.pb_is_partial
+    assert result.pb_delta == 0.0  # different reaches are not comparable
+    assert database.progress_for(Comparison.PB) == (pytest.approx(100.0), 2)
+
+
+def test_faster_attempt_to_the_same_reach_wins_with_a_delta():
+    database = db()
+    ingest(database, [10.0, 10.0, 0.0])
+    result = ingest(database, [8.0, 9.0, 0.0])
+    assert result.is_new_pb and result.pb_delta == pytest.approx(-3.0)
+    assert database.pb == pytest.approx([8.0, 9.0, 0.0])
+
+
+def test_first_complete_run_supersedes_the_provisional_pb():
     database = db()
     ingest(database, [1.0, 1.0, 0.0])
-    assert database.total_for(Comparison.PB) == 0.0
+    result = ingest(database, [10.0, 10.0, 10.0])
+    assert result.is_new_pb and not result.pb_is_partial
+    assert database.total_for(Comparison.PB) == pytest.approx(30.0)
 
 
 # -- best segments --------------------------------------------------------
@@ -219,6 +263,12 @@ def test_incomplete_comparison_reports_zero_total():
     database = db()
     ingest(database, [10.0, 0.0, 0.0])
     assert database.total_for(Comparison.PB) == 0.0
+
+
+def test_progress_is_formatted_with_its_reach_until_complete():
+    assert format_progress(0.0, 0, 11) == "--"
+    assert format_progress(141.9, 2, 11) == "2:21.90  (2/11)"
+    assert format_progress(141.9, 11, 11) == "2:21.90"
 
 
 def test_resizes_to_match_game_file():
